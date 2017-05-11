@@ -4,13 +4,10 @@ module.exports = function (express, https, http, DefaultMiddleware, PromiseMiddl
 
     constructor() {
       this.app = express();
+
       if (config.Https) {
         this.privateKey = fs.readFileSync(config.Https.PrivateKeyFilePath, 'utf8');
         this.certificate = fs.readFileSync(config.Https.CertificateFilePath, 'utf8');
-        this.credentials = {
-          key: this.privateKey,
-          cert: this.certificate
-        };
       }
     }
 
@@ -27,8 +24,8 @@ module.exports = function (express, https, http, DefaultMiddleware, PromiseMiddl
     getHttpsPort() {
       let port = config.Https.Port;
 
-      if (this.server) {
-        port = this.httpsServer.address().port || port;
+      if (this.sslServer) {
+        port = this.sslServer.address().port || port;
       }
 
       return port;
@@ -85,7 +82,11 @@ module.exports = function (express, https, http, DefaultMiddleware, PromiseMiddl
           Logger.info(this.startedMessage());
 
           if (config.Https) {
-            https.createServer(this.credentials, (request, response) => {
+            this.sslServer = https.createServer(
+              {
+                key: this.privateKey,
+                cert: this.certificate
+              }, (request, response) => {
               const proxy = http.createClient(80, request.headers.host);
               const proxyRequest = proxy.request(request.method, request.url, request.headers);
 
@@ -127,6 +128,11 @@ module.exports = function (express, https, http, DefaultMiddleware, PromiseMiddl
 
     getCloseAsync() {
       if (this.server && this.server.closeAsync) {
+        if (this.sslServer && this.sslServer.closeAsync) {
+          console.log('HERE');
+          return Promise.all([this.server.closeAsync, this.sslServer.closeAsync]);
+        }
+
         return this.server.closeAsync();
       }
 
